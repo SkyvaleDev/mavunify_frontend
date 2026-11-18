@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell, Check, Edit2, Globe2, LogOut, Mail, MapPin,
-  Phone, Ruler, Star, X,
+  Bell, BriefcaseBusiness, Camera, Check, Edit2, Globe2, LogOut, Mail,
+  MapPin, MessageCircle, Phone, Ruler, ShieldCheck, Trash2, Users,
+  UserRound, X,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 
@@ -15,6 +16,15 @@ type FarmerProfile = {
   location: string;
   phone: string;
   email: string;
+  photo: string;
+  language: string;
+  gender: string;
+  genderConsent: boolean;
+  ageRange: string;
+  cooperative: string;
+  experience: string;
+  communicationChannel: string;
+  alternativeContact: string;
   farmSize: string;
   crops: string;
   practice: string;
@@ -34,6 +44,15 @@ const DEFAULT_PROFILE: FarmerProfile = {
   location: "Wanale, Mbale District",
   phone: "+256 700 234 567",
   email: "nakato@email.com",
+  photo: "",
+  language: "English",
+  gender: "",
+  genderConsent: false,
+  ageRange: "",
+  cooperative: "Wanale Coffee Growers Cooperative",
+  experience: "6-10 years",
+  communicationChannel: "SMS",
+  alternativeContact: "",
   farmSize: "3.5 acres",
   crops: "Arabica Coffee, Beans",
   practice: "Organic / Mixed",
@@ -64,6 +83,39 @@ function readStored<T,>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function resizeProfilePhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Choose an image file."));
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 512 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext("2d");
+      URL.revokeObjectURL(objectUrl);
+
+      if (!context) {
+        reject(new Error("This photo could not be processed."));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("This photo could not be opened."));
+    };
+    image.src = objectUrl;
+  });
 }
 
 function PreferenceToggle({
@@ -130,12 +182,16 @@ export default function Profile() {
   const saveProfile = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setProfile(draft);
+    setPreferences((current) => ({ ...current, language: draft.language }));
     setEditorOpen(false);
     setStatus("Profile saved on this device");
   };
 
   const updatePreference = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setPreferences((current) => ({ ...current, [key]: value }));
+    if (key === "language") {
+      setProfile((current) => ({ ...current, language: value as string }));
+    }
     setStatus("Preferences saved on this device");
   };
 
@@ -144,7 +200,15 @@ export default function Profile() {
     { label: "Farm Size", value: profile.farmSize },
     { label: "Primary Crops", value: profile.crops },
     { label: "Farming Practice", value: profile.practice },
-    { label: "Member Since", value: "March 2024" },
+  ];
+  const personalInfo = [
+    { label: "Preferred language", value: profile.language },
+    { label: "Gender", value: profile.genderConsent ? profile.gender || "Not provided" : "Not shared" },
+    { label: "Age range", value: profile.ageRange || "Not shared" },
+    { label: "Cooperative membership", value: profile.cooperative || "Not listed" },
+    { label: "Farming experience", value: profile.experience || "Not provided" },
+    { label: "Preferred contact", value: profile.communicationChannel },
+    { label: "Alternative contact", value: profile.alternativeContact || "Not provided" },
   ];
 
   return (
@@ -175,18 +239,17 @@ export default function Profile() {
             </button>
           </div>
           <div className="px-5 pb-5">
-            <img src={FARMER_HARVEST} alt="Farm harvest" className="-mt-10 mb-3 h-20 w-20 rounded-xl border-4 border-white object-cover shadow-md" />
+            {profile.photo ? (
+              <img src={profile.photo} alt={`${profile.name}'s profile`} className="-mt-10 mb-3 h-20 w-20 rounded-xl border-4 border-white object-cover shadow-md" />
+            ) : (
+              <div aria-label="No profile photo" className="-mt-10 mb-3 flex h-20 w-20 items-center justify-center rounded-xl border-4 border-white bg-[#E7EFE5] text-[#45644A] shadow-md">
+                <UserRound className="h-9 w-9" />
+              </div>
+            )}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold text-[#1C2B1C]">{profile.name}</h2>
-                <p className="text-sm font-semibold text-[#2E7D32]">Improving Farmer</p>
-              </div>
-              <div className="text-left sm:text-right">
-                <div className="flex items-center gap-1 sm:justify-end">
-                  <Star className="h-4 w-4 fill-[#C89022] text-[#C89022]" />
-                  <span className="font-bold text-[#1C2B1C]">4.2</span>
-                </div>
-                <p className="text-xs text-[#718071]">Mavunify Score</p>
+                <p className="mt-0.5 text-sm text-[#5A6B5A]">{profile.cooperative || "Independent farmer"}</p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[#5A6B5A]">
@@ -197,18 +260,26 @@ export default function Profile() {
           </div>
         </section>
 
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Farm Records", value: "47" },
-            { label: "Lessons Done", value: "3" },
-            { label: "Days Active", value: "127" },
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-[#EAF3EA] bg-white p-3 text-center shadow-xs sm:p-4">
-              <p className="text-2xl font-bold text-[#2E7D32]">{value}</p>
-              <p className="mt-0.5 text-xs text-[#718071]">{label}</p>
+        <section className="rounded-xl border border-[#EAF3EA] bg-white p-5 shadow-xs">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3F8F3] text-[#2E7D32]"><ShieldCheck className="h-4 w-4" /></div>
+              <div>
+                <h2 className="font-bold text-[#1C2B1C]">About you</h2>
+                <p className="text-xs text-[#718071]">Personal details and how to reach you</p>
+              </div>
             </div>
-          ))}
-        </div>
+            <button onClick={editProfile} aria-label="Edit personal details" className="rounded-lg p-2 text-[#5A6B5A] transition-colors hover:bg-[#F3F8F3]"><Edit2 className="h-4 w-4" /></button>
+          </div>
+          <dl className="divide-y divide-[#EAF3EA]">
+            {personalInfo.map(({ label, value }) => (
+              <div key={label} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-3 first:pt-1 last:pb-0">
+                <dt className="text-sm text-[#5A6B5A]">{label}</dt>
+                <dd className="max-w-[65%] text-right text-sm font-semibold text-[#1C2B1C]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
         <section className="rounded-xl border border-[#EAF3EA] bg-white p-5 shadow-xs">
           <div className="mb-3 flex items-center justify-between">
@@ -320,33 +391,141 @@ export default function Profile() {
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <h2 id="profile-editor-title" className="text-lg font-bold text-[#1C2B1C]">Edit farmer profile</h2>
-                <p className="mt-1 text-sm text-[#718071]">Update your contact and farm details.</p>
+                <p className="mt-1 text-sm text-[#718071]">Your details are saved on this device.</p>
               </div>
               <button onClick={() => setEditorOpen(false)} aria-label="Close profile editor" className="rounded-lg p-2 text-[#5A6B5A] hover:bg-[#F3F8F3]"><X className="h-5 w-5" /></button>
             </div>
-            <form onSubmit={saveProfile} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {([
-                  ["name", "Full name"],
-                  ["location", "Location"],
-                  ["phone", "Phone number"],
-                  ["email", "Email address"],
-                  ["farmSize", "Farm size"],
-                  ["crops", "Primary crops"],
-                  ["practice", "Farming practice"],
-                ] as const).map(([field, label]) => (
-                  <label key={field} className="block text-sm font-semibold text-[#344534]">
-                    {label}
-                    <input
-                      required
-                      type={field === "email" ? "email" : "text"}
-                      value={draft[field]}
-                      onChange={(event) => setDraft((current) => ({ ...current, [field]: event.currentTarget.value }))}
-                      className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15"
-                    />
+            <form onSubmit={saveProfile} className="space-y-5">
+              <section>
+                <h3 className="mb-3 text-sm font-bold text-[#1C2B1C]">Personal details</h3>
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  {draft.photo ? (
+                    <img src={draft.photo} alt="Profile preview" className="h-16 w-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-[#E7EFE5] text-[#45644A]"><UserRound className="h-7 w-7" /></div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-[#D8EAD8] px-3 text-sm font-semibold text-[#405740] hover:bg-[#F3F8F3]">
+                      <Camera className="h-4 w-4" /> {draft.photo ? "Change photo" : "Add a photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={async (event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = "";
+                          if (!file) return;
+                          try {
+                            const photo = await resizeProfilePhoto(file);
+                            setDraft((current) => ({ ...current, photo }));
+                            setStatus("");
+                          } catch (error) {
+                            setStatus(error instanceof Error ? error.message : "Photo could not be uploaded.");
+                          }
+                        }}
+                      />
+                    </label>
+                    {draft.photo && (
+                      <button type="button" onClick={() => setDraft((current) => ({ ...current, photo: "" }))} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-[#9A3D38] hover:bg-[#FFF4F3]">
+                        <Trash2 className="h-4 w-4" /> Remove
+                      </button>
+                    )}
+                    <span className="text-xs text-[#718071]">Optional</span>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Full name <span className="text-[#B2433B]" aria-hidden="true">*</span>
+                    <input required autoComplete="name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
                   </label>
-                ))}
-              </div>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Phone number <span className="text-[#B2433B]" aria-hidden="true">*</span>
+                    <input required type="tel" autoComplete="tel" value={draft.phone} onChange={(event) => setDraft((current) => ({ ...current, phone: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Email address
+                    <input type="email" autoComplete="email" value={draft.email} onChange={(event) => setDraft((current) => ({ ...current, email: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Location <span className="text-[#B2433B]" aria-hidden="true">*</span>
+                    <input required autoComplete="address-level2" value={draft.location} onChange={(event) => setDraft((current) => ({ ...current, location: event.currentTarget.value }))} placeholder="Village, district" className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Preferred language
+                    <select value={draft.language} onChange={(event) => setDraft((current) => ({ ...current, language: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] bg-white px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15">
+                      {["English", "Luganda", "Runyankole", "Lusoga", "Ateso", "Lugbara", "Acholi", "Swahili"] .map((language) => <option key={language}>{language}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Age range <span className="font-normal text-[#718071]">(optional)</span>
+                    <select value={draft.ageRange} onChange={(event) => setDraft((current) => ({ ...current, ageRange: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] bg-white px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15">
+                      <option value="">Prefer not to say</option>
+                      {["Under 25", "25-34", "35-44", "45-54", "55-64", "65 or older"].map((range) => <option key={range}>{range}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-4 rounded-lg bg-[#F7F9F5] p-3.5">
+                  <label className="flex items-start gap-2.5 text-sm text-[#405740]">
+                    <input
+                      type="checkbox"
+                      checked={draft.genderConsent}
+                      onChange={(event) => setDraft((current) => ({ ...current, genderConsent: event.currentTarget.checked, gender: event.currentTarget.checked ? current.gender : "" }))}
+                      className="mt-0.5 h-4 w-4 accent-[#2E7D32]"
+                    />
+                    <span>I consent to sharing my gender to support inclusive agricultural services. This is optional.</span>
+                  </label>
+                  {draft.genderConsent && (
+                    <label className="mt-3 block text-sm font-semibold text-[#344534]">
+                      Gender
+                      <select value={draft.gender} onChange={(event) => setDraft((current) => ({ ...current, gender: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] bg-white px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15">
+                        <option value="">Prefer not to say</option>
+                        <option>Woman</option>
+                        <option>Man</option>
+                        <option>Non-binary</option>
+                        <option>Self-describe</option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+              </section>
+
+              <section className="border-t border-[#EAF3EA] pt-4">
+                <h3 className="mb-3 text-sm font-bold text-[#1C2B1C]">Farming and contact</h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Cooperative membership
+                    <input value={draft.cooperative} onChange={(event) => setDraft((current) => ({ ...current, cooperative: event.currentTarget.value }))} placeholder="Name of cooperative, or leave blank" className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Farming experience
+                    <select value={draft.experience} onChange={(event) => setDraft((current) => ({ ...current, experience: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] bg-white px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15">
+                      {["Less than 1 year", "1-5 years", "6-10 years", "11-20 years", "More than 20 years"].map((range) => <option key={range}>{range}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Preferred communication channel
+                    <select value={draft.communicationChannel} onChange={(event) => setDraft((current) => ({ ...current, communicationChannel: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] bg-white px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15">
+                      {["SMS", "WhatsApp", "Voice call"].map((channel) => <option key={channel}>{channel}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Emergency or alternative contact <span className="font-normal text-[#718071]">(optional)</span>
+                    <input type="tel" value={draft.alternativeContact} onChange={(event) => setDraft((current) => ({ ...current, alternativeContact: event.currentTarget.value }))} placeholder="Name and phone number" className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Farm size
+                    <input value={draft.farmSize} onChange={(event) => setDraft((current) => ({ ...current, farmSize: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534]">
+                    Primary crops
+                    <input value={draft.crops} onChange={(event) => setDraft((current) => ({ ...current, crops: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                  <label className="block text-sm font-semibold text-[#344534] sm:col-span-2">
+                    Farming practice
+                    <input value={draft.practice} onChange={(event) => setDraft((current) => ({ ...current, practice: event.currentTarget.value }))} className="mt-1.5 block min-h-11 w-full rounded-lg border border-[#CEDDCE] px-3 text-sm font-normal text-[#1C2B1C] outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/15" />
+                  </label>
+                </div>
+              </section>
               <div className="flex justify-end gap-2 border-t border-[#EAF3EA] pt-4">
                 <button type="button" onClick={() => setEditorOpen(false)} className="rounded-lg border border-[#D8EAD8] px-4 py-2.5 text-sm font-bold text-[#5A6B5A] hover:bg-[#F3F8F3]">Cancel</button>
                 <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-[#2E7D32] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#1B5E20]"><Check className="h-4 w-4" /> Save profile</button>
